@@ -1,6 +1,6 @@
 use alloy::primitives::TxHash;
 use alloy::providers::Provider;
-use alloy::rpc::types::Block;
+use alloy::rpc::types::{Block, Transaction};
 use alloy::{providers::RootProvider, pubsub::PubSubFrontend};
 use futures::StreamExt;
 use log::warn;
@@ -12,12 +12,12 @@ pub struct StreamActor {
     /// Sender for blocks
     block_sender: Sender<Block>,
     /// Sender for pending transactions
-    tx_sender: Sender<TxHash>,
+    tx_sender: Sender<Transaction>,
 }
 
 impl StreamActor {
     /// Construct the stream actor with the block and tx senders
-    pub fn new(block_sender: Sender<Block>, tx_sender: Sender<TxHash>) -> Self {
+    pub fn new(block_sender: Sender<Block>, tx_sender: Sender<Transaction>) -> Self {
         Self {
             block_sender,
             tx_sender,
@@ -58,15 +58,15 @@ impl StreamActor {
     // Stream pending transactions from the mempool
     async fn stream_mempool(
         ws_provider: Arc<RootProvider<PubSubFrontend>>,
-        tx_sender: Sender<TxHash>,
+        tx_sender: Sender<Transaction>,
     ) {
         // subscribe to all of the pending transactions
-        let sub = ws_provider.subscribe_pending_transactions().await.unwrap();
+        let sub = ws_provider.subscribe_full_pending_transactions().await.unwrap();
         let mut stream = sub.into_stream();
 
         // wait for a new transaction
-        while let Some(tx_hash) = stream.next().await {
-            if let Err(e) = tx_sender.send(tx_hash) {
+        while let Some(tx) = stream.next().await {
+            if let Err(e) = tx_sender.send(tx) {
                 warn!("Failed to send transaciton hash: {} ", e)
             }
         }
